@@ -1,3 +1,4 @@
+import os
 import asyncio
 import requests
 from math import radians, cos, sin, asin, sqrt
