@@ -42,12 +42,20 @@ async def cmd_start(message: Message):
         await message.answer("Xush kelibsiz! Rolingizni tanlang:", reply_markup=kb_start)
 
 # --- 2. ROLNI O'CHIRISH (RESET) ---
-@dp.message(F.text == "🔄 Rolni o'zgartirish")
+@dp.message(F.text == "🔄 Rolni o'zgartirish") # @ belgisi borligiga e'tibor bering
 @dp.message(Command("reset"))
 async def reset_user(message: Message):
     uid = message.from_user.id
+    # 1. Firebase bazasidan foydalanuvchini o'chirish
     requests.delete(f"{BASE_URL}users/{uid}.json")
-    await message.answer("🔄 Rolingiz o'chirildi. Endi /start bossangiz, qaytadan rol tanlashingiz mumkin.", reply_markup=types.ReplyKeyboardRemove())
+    
+    # 2. Eski haydovchi tugmalarini butunlay yopish
+    await message.answer(
+        "🔄 Ma'lumotlaringiz o'chirildi.\nEndi botni noldan boshlash uchun /start bosing.", 
+        reply_markup=types.ReplyKeyboardRemove() 
+    )
+
+
 
 # --- 3. ROLNI SAQLASH ---
 @dp.callback_query(F.data.startswith("set_role_"))
