@@ -17,7 +17,11 @@ def home():
     return "OK"  # Cron-job uchun eng yengil javob
 
 def run():
-    app.run(host='0.0.0.0', port=8080)
+    # Render portni o'zi avtomatik beradi (PORT muhit o'zgaruvchisi orqali)
+    # Agar u bermasa, 10000-portni ishlatamiz
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host='0.0.0.0', port=port)
+
 
 def keep_alive():
     t = Thread(target=run)
