@@ -2,7 +2,7 @@ import os
 import asyncio
 import requests
 from aiogram import Bot, Dispatcher, types, F
-from aiogram.filters import CommandStart
+from aiogram.filters import CommandStart, Command # Command qo'shildi
 from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
 
 # --- SOZLAMALAR ---
@@ -21,14 +21,16 @@ async def cmd_start(message: Message):
     if user_data and user_data.get("role") == "driver":
         kb = ReplyKeyboardMarkup(keyboard=[
             [KeyboardButton(text="🚖 Yangi buyurtmalarni kutish")],
-            [KeyboardButton(text="💰 Mening balansim")]
+            [KeyboardButton(text="💰 Mening balansim")],
+            [KeyboardButton(text="🔄 Rolni o'zgartirish")] # Yangi tugma
         ], resize_keyboard=True)
         await message.answer(f"Xush kelibsiz, haydovchi {user_data.get('name')}!", reply_markup=kb)
 
     elif user_data and user_data.get("role") == "client":
         kb = ReplyKeyboardMarkup(keyboard=[
             [KeyboardButton(text="🚕 Taksi chaqirish", request_location=True)],
-            [KeyboardButton(text="ℹ️ Ma'lumot")]
+            [KeyboardButton(text="ℹ️ Ma'lumot")],
+            [KeyboardButton(text="🔄 Rolni o'zgartirish")] # Yangi tugma
         ], resize_keyboard=True)
         await message.answer("Xush kelibsiz! Taksi kerak bo'lsa tugmani bosing.", reply_markup=kb)
     
@@ -39,7 +41,15 @@ async def cmd_start(message: Message):
         ])
         await message.answer("Xush kelibsiz! Rolingizni tanlang:", reply_markup=kb_start)
 
-# --- 2. ROLNI SAQLASH ---
+# --- 2. ROLNI O'CHIRISH (RESET) ---
+@dp.message(F.text == "🔄 Rolni o'zgartirish")
+@dp.message(Command("reset"))
+async def reset_user(message: Message):
+    uid = message.from_user.id
+    requests.delete(f"{BASE_URL}users/{uid}.json")
+    await message.answer("🔄 Rolingiz o'chirildi. Endi /start bossangiz, qaytadan rol tanlashingiz mumkin.", reply_markup=types.ReplyKeyboardRemove())
+
+# --- 3. ROLNI SAQLASH ---
 @dp.callback_query(F.data.startswith("set_role_"))
 async def set_role(callback: types.CallbackQuery):
     role = callback.data.split("_")[2]
@@ -48,7 +58,7 @@ async def set_role(callback: types.CallbackQuery):
     await callback.message.answer(f"✅ Tayyor! Endi botni ishlatish uchun qaytadan /start bosing.")
     await callback.answer()
 
-# --- 3. BUYURTMA BERISH ---
+# --- 4. BUYURTMA BERISH ---
 @dp.message(F.location)
 async def handle_location(message: Message):
     uid = message.from_user.id
@@ -68,7 +78,7 @@ async def handle_location(message: Message):
             map_url = f"https://yandex.uz/maps/?pt={lon},{lat}&z=16&l=map"
             await bot.send_message(d_id, f"🔔 **Yangi buyurtma!**\n👤 {message.from_user.full_name}\n📍 [Xaritada ko'rish]({map_url})", reply_markup=kb_h, parse_mode="Markdown")
 
-# --- 4. QABUL QILISH ---
+# --- 5. QABUL QILISH ---
 @dp.callback_query(F.data.startswith("accept_"))
 async def accept_order(callback: types.CallbackQuery):
     c_id = callback.data.split("_")[1]
