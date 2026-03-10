@@ -119,8 +119,18 @@ async def accept_order(callback: types.CallbackQuery):
         [InlineKeyboardButton(text="▶️ SAFARNI BOSHLASH", callback_data=f"start_trip_{c_id}")],
         [InlineKeyboardButton(text="❌ Bekor qilish", callback_data=f"d_cancel_{c_id}")]
     ])
+        # 1. Mijoz uchun xarita linki
+    MIJOZ_XARITASI = "https://umid4567.github.io/my-taxi-bot/client.html"
+
+    # 2. Mijozga boradigan "Kuzatish" tugmasi
+    kb_mijoz = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🚖 Haydovchini kuzatish", web_app=WebAppInfo(url=MIJOZ_XARITASI))]
+    ])
+
+    # 3. Haydovchi va Mijozga xabarlar
     await callback.message.edit_text(f"✅ Buyurtma qabul qilindi!", reply_markup=kb_h)
-    await bot.send_message(c_id, "🚕 Haydovchi qabul qildi va yo'lga chiqdi!")
+    await bot.send_message(c_id, "🚕 Haydovchi qabul qildi va yo'lga chiqdi!", reply_markup=kb_mijoz)
+
 
 # --- 5. SAFARNI BOSHLASH VA TUGATISH ---
 @dp.callback_query(F.data.startswith("start_trip_"))
