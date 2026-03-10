@@ -49,12 +49,25 @@ def calculate_distance(lat1, lon1, lat2, lon2):
 # --- 1. START ---
 @dp.message(CommandStart())
 async def cmd_start(message: Message):
-    if message.from_user.id == HAYDOVCHI_ID:
-        kb = ReplyKeyboardMarkup(keyboard=[[KeyboardButton(text="📍 Lokatsiyamni yangilash", request_location=True)]], resize_keyboard=True)
-        await message.answer("Xush kelibsiz! Bot xizmatga tayyor.", reply_markup=kb)
+    uid = message.from_user.id
+    # Firebase'dan bu foydalanuvchi haydovchimi yoki yo'qligini tekshiramiz
+    user_data = requests.get(f"{BASE_URL}users/{uid}.json").json()
+
+    if user_data and user_data.get("role") == "driver":
+        # Agar u haydovchi bo'lsa
+        kb = ReplyKeyboardMarkup(keyboard=[
+            [KeyboardButton(text="🚀 Ishni boshlash (Avtomat)", web_app=WebAppInfo(url=XARITA_LINKI))],
+            [KeyboardButton(text="📍 Qo'lda yangilash", request_location=True)]
+        ], resize_keyboard=True)
+        await message.answer(f"Xush kelibsiz, {user_data.get('name')}! Ishni boshlash uchun tugmani bosing.", reply_markup=kb)
     else:
-        kb = ReplyKeyboardMarkup(keyboard=[[KeyboardButton(text="🚖 Taksi chaqirish", request_location=True)]], resize_keyboard=True)
-        await message.answer("Salom! Taksi kerak bo'lsa, pastdagi tugmani bosing 👇", reply_markup=kb)
+        # Agar u yangi bo'lsa yoki mijoz bo'lsa
+        kb = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="🚖 Taksi chaqirish", callback_data="role_client")],
+            [InlineKeyboardButton(text="🚕 Haydovchi bo'lib ishlash", callback_data="role_driver")]
+        ])
+        await message.answer("Xush kelibsiz! Botdan foydalanish uchun rolingizni tanlang:", reply_markup=kb)
+
 
 # --- 2. LOKATSIYA YUBORILGANDA ---
 @dp.message(F.location)
@@ -75,6 +88,24 @@ async def handle_location(message: Message):
             [InlineKeyboardButton(text="💬 Telegram aloqa", url=f"tg://user?id={uid}")]
         ])
         await bot.send_message(HAYDOVCHI_ID, f"🔔 **YANGI BUYURTMA!**\n👤 {message.from_user.full_name}\n📍 [Xaritada ko'r](https://yandex.uz/maps/?pt={lon},{lat}&z=16&l=map)", reply_markup=kb_h, parse_mode="Markdown")
+
+@dp.callback_query(F.data.startswith("role_"))
+async def set_role(callback: types.CallbackQuery):
+    role = callback.data.split("_")[1]
+    uid = callback.from_user.id
+    name = callback.from_user.full_name
+
+    # Bazaga saqlash
+    requests.put(f"{BASE_URL}users/{uid}.json", json={
+        "role": role,
+        "name": name,
+        "status": "active"
+    })
+
+    if role == "driver":
+        await callback.message.edit_text("✅ Tabriklaymiz! Siz haydovchi sifatida ro'yxatdan o'tdingiz. Botni qayta ishga tushirish uchun /start bosing.")
+    else:
+        await callback.message.edit_text("✅ Siz mijoz sifatida ro'yxatdan o'tdingiz. /start bosing.")
 
 # --- 3. QABUL QILISH (Haydovchi bosganda) ---
 @dp.callback_query(F.data.startswith("ok_"))
