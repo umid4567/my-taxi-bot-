@@ -49,6 +49,7 @@ async def cmd_start(message: Message):
     uid = message.from_user.id
     user_data = requests.get(f"{BASE_URL}users/{uid}.json").json()
 
+    # HAYDOVCHI UCHUN MENYU
     if user_data and user_data.get("role") == "driver":
         kb = ReplyKeyboardMarkup(keyboard=[
             [KeyboardButton(text="🚀 Ishni boshlash (Avtomat)", web_app=WebAppInfo(url=XARITA_LINKI))],
@@ -56,12 +57,36 @@ async def cmd_start(message: Message):
             [KeyboardButton(text="📍 Qo'lda yangilash", request_location=True)]
         ], resize_keyboard=True)
         await message.answer(f"Xush kelibsiz, {user_data.get('name')}! Ishga tayyormisiz?", reply_markup=kb)
+
+    @dp.callback_query(F.data.startswith("set_role_"))
+async def set_role(callback: types.CallbackQuery):
+    role = callback.data.split("_")[2]
+    uid = callback.from_user.id
+    name = callback.from_user.full_name
+
+    # Bazaga saqlaymiz (Firebase)
+    requests.put(f"{BASE_URL}users/{uid}.json", json={"role": role, "name": name})
+    
+    await callback.answer("Tanlov saqlandi!")
+    await callback.message.answer(f"Tabriklaymiz! Endi siz {role} rolidamisiz. Botni qayta ishga tushirish uchun /start bosing.")
+
+    
+    # MIJOZ (YO'LOVCHI) UCHUN MENYU
+    elif user_data and user_data.get("role") == "client":
+        kb_client = ReplyKeyboardMarkup(keyboard=[
+            [KeyboardButton(text="🚖 Taksi chaqirish", request_location=True)], # Lokatsiya so'rash bilan birga
+            [KeyboardButton(text="ℹ️ Ma'lumot")]
+        ], resize_keyboard=True)
+        await message.answer(f"Xush kelibsiz, {user_data.get('name')}! Qayerga boramiz?", reply_markup=kb_client)
+    
+    # RO'YXATDAN O'TMAGANLAR UCHUN (BIRINCHI MARTA KIRGANLAR)
     else:
-        kb = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="🚖 Taksi chaqirish", callback_data="role_client")],
-            [InlineKeyboardButton(text="🚕 Haydovchi bo'lib ishlash", callback_data="role_driver")]
+        kb_start = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="🚖 Men yo'lovchiman", callback_data="set_role_client")],
+            [InlineKeyboardButton(text="🚕 Men haydovchiman", callback_data="set_role_driver")]
         ])
-        await message.answer("Xush kelibsiz! Rolingizni tanlang:", reply_markup=kb)
+        await message.answer("Xush kelibsiz! Botdan foydalanish uchun rolingizni tanlang:", reply_markup=kb_start)
+
 
 # --- 2. LOKATSIYA VA BUYURTMA ---
 @dp.message(F.location)
