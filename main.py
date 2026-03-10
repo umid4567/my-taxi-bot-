@@ -6,14 +6,32 @@ from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import CommandStart
 from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo, ReplyKeyboardMarkup, KeyboardButton
 
+# --- VEB SERVER QISMI (CRON-JOB UCHUN) ---
+from flask import Flask
+from threading import Thread
+
+app = Flask('')
+
+@app.route('/')
+def home():
+    return "OK"  # Cron-job uchun eng yengil javob
+
+def run():
+    app.run(host='0.0.0.0', port=8080)
+
+def keep_alive():
+    t = Thread(target=run)
+    t.start()
+# ---------------------------------------
+
 # --- SOZLAMALAR ---
 TOKEN = os.getenv("BOT_TOKEN") 
 BASE_URL = "https://umut-taxi-default-rtdb.europe-west1.firebasedatabase.app/"
 HAYDOVCHI_ID = 7748146680 
 XARITA_LINKI = "https://umid4567.github.io/my-taxi-bot/"
 
-KM_NARXI = 3500      
-MINIMAL_NARX = 6000   
+KM_NARXI = 4000      
+MINIMAL_NARX = 000   
 
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
@@ -132,8 +150,8 @@ async def driver_cancel(callback: types.CallbackQuery):
     await callback.answer()
 
 async def main():
+    keep_alive() # Veb-serverni ishga tushirish
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
     asyncio.run(main())
-
