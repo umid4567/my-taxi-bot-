@@ -4,7 +4,19 @@ import requests
 from math import radians, cos, sin, asin, sqrt
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import CommandStart, Command
-from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo, ReplyKeyboardMarkup, KeyboardButton
+from aiogram import Bot, Dispatcher, types, F
+from aiogram.filters import CommandStart, Command
+from aiogram.types import (
+    Message, 
+    ReplyKeyboardMarkup, 
+    KeyboardButton, 
+    InlineKeyboardMarkup, 
+    InlineKeyboardButton, 
+    WebAppInfo,
+    CallbackQuery
+)
+import requests
+
 
 # --- VEB SERVER QISMI (CRON-JOB UCHUN) ---
 from flask import Flask
