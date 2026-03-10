@@ -156,17 +156,35 @@ async def start_trip(callback: types.CallbackQuery):
 @dp.callback_query(F.data.startswith("stop_"))
 async def stop_trip(callback: types.CallbackQuery):
     c_id = int(callback.data.split("_")[1])
+    d_id = callback.from_user.id  # Taksometrni to'xtatayotgan haydovchining ID-si
+    
+    # 1. Safar boshlangan nuqtani olish (Mijoz buyurtma bergan joy)
     s_loc = requests.get(f"{BASE_URL}active_trips/{c_id}.json").json()
-    d_loc = requests.get(f"{BASE_URL}driver_location.json").json()
+    
+    # 2. Haydovchining aynan O'ZIGA tegishli oxirgi lokatsiyasini olish
+    d_loc = requests.get(f"{BASE_URL}driver_location/{d_id}.json").json()
+    
     if s_loc and d_loc:
+        # Masofani hisoblash
         dist = calculate_distance(s_loc['s_lat'], s_loc['s_lon'], d_loc['lat'], d_loc['lon'])
+        
+        # Narxni hisoblash (500 so'mga yaxlitlash bilan)
         narx = max(int(round((dist * KM_NARXI) / 500) * 500), MINIMAL_NARX)
+        
         res = f"🏁 **Safar yakunlandi!**\n📏 Masofa: `{dist}` km\n💰 Jami: **{narx:,}** so'm"
+        
         await callback.message.edit_text(res, parse_mode="Markdown")
         await bot.send_message(c_id, res, parse_mode="Markdown")
+        
+        # Ma'lumotlarni tozalash
         requests.delete(f"{BASE_URL}active_trips/{c_id}.json")
         requests.delete(f"{BASE_URL}orders/{c_id}.json")
+    else:
+        # Agar lokatsiya topilmasa, haydovchiga ogohlantirish berish
+        await callback.answer("⚠️ Xato: Lokatsiya ma'lumotlari topilmadi. Web App ochiqligini tekshiring!", show_alert=True)
+    
     await callback.answer()
+
 
 # --- 7. BEKOR QILISHLAR ---
 @dp.callback_query(F.data.startswith("c_cancel_"))
