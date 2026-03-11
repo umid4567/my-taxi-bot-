@@ -42,7 +42,7 @@ async def cmd_start(message: Message):
         ])
         await message.answer("Xush kelibsiz! Rolingizni tanlang:", reply_markup=kb_start)
 
-# --- 2. ROLNI O'CHIRISH ---
+# --- 2. ROLNI BOSHQARISH ---
 @dp.message(F.text == "🔄 Rolni o'zgartirish")
 @dp.message(Command("reset"))
 async def reset_user(message: Message):
@@ -50,7 +50,6 @@ async def reset_user(message: Message):
     requests.delete(f"{BASE_URL}users/{uid}.json")
     await message.answer("🔄 Ma'lumotlaringiz o'chirildi.\n/start bosing.", reply_markup=types.ReplyKeyboardRemove())
 
-# --- 3. ROLNI SAQLASH ---
 @dp.callback_query(F.data.startswith("set_role_"))
 async def set_role(callback: types.CallbackQuery):
     role = callback.data.split("_")[2]
@@ -59,7 +58,7 @@ async def set_role(callback: types.CallbackQuery):
     await callback.message.answer(f"✅ Saqlandi! /start bosing.")
     await callback.answer()
 
-# --- 4. BUYURTMA BERISH ---
+# --- 3. BUYURTMA BERISH (YO'LOVCHI) ---
 @dp.message(F.location)
 async def handle_location(message: Message):
     uid = message.from_user.id
@@ -67,9 +66,7 @@ async def handle_location(message: Message):
     lon = round(message.location.longitude, 5)
     
     requests.put(f"{BASE_URL}orders/{uid}.json", json={
-        "lat": lat, 
-        "lon": lon, 
-        "name": message.from_user.full_name
+        "lat": lat, "lon": lon, "name": message.from_user.full_name
     })
     
     await message.answer("🚕 Buyurtmangiz yuborildi. Iltimos kuting...")
@@ -78,25 +75,16 @@ async def handle_location(message: Message):
     for d_id, data in all_users.items():
         if data.get("role") == "driver":
             kb_h = InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(
-                    text="✅ Qabul qilish", 
-                    callback_data=f"accept_{uid}_{lat}_{lon}" 
-                )]
+                [InlineKeyboardButton(text="✅ Qabul qilish", callback_data=f"accept_{uid}_{lat}_{lon}")]
             ])
             try:
-                await bot.send_message(
-                    d_id, 
-                    f"🔔 **Yangi buyurtma!**\n👤 Yo'lovchi: {message.from_user.full_name}", 
-                    reply_markup=kb_h
-                )
-            except Exception:
-                continue
+                await bot.send_message(d_id, f"🔔 **Yangi buyurtma!**\n👤 Yo'lovchi: {message.from_user.full_name}", reply_markup=kb_h)
+            except: continue
 
-# --- 5. QABUL QILISH ---
+# --- 4. QABUL QILISH (HAYDOVCHI) ---
 @dp.callback_query(F.data.startswith("accept_"))
 async def accept_order(callback: types.CallbackQuery):
     data = callback.data.split("_")
-    # Agar data ichida koordinatalar bo'lmasa, xato bermasligi uchun tekshiramiz
     if len(data) < 4:
         await callback.answer("⚠️ Ma'lumot yetarli emas!", show_alert=True)
         return
@@ -110,8 +98,22 @@ async def accept_order(callback: types.CallbackQuery):
     ])
     
     await callback.message.edit_text("✅ Buyurtma qabul qilindi!", reply_markup=kb_app)
-    await bot.send_message(c_id, "🚕 Haydovchi buyurtmani qabul qildi!")
+    await bot.send_message(c_id, "🚕 Haydovchi buyurtmani qabul qildi va yo'lga chiqdi!")
     await callback.answer()
+
+# --- 5. WEB APP'DAN MA'LUMOT QABUL QILISH ("KELDIM" TUGMASI) ---
+@dp.message(F.web_app_data)
+async def handle_webapp_data(message: Message):
+    # Web App'dan kelgan ma'lumotni olamiz
+    result = message.web_app_data.data
+    
+    if result.startswith("arrived_"):
+        # Haydovchiga javob qaytaramiz
+        await message.answer("✅ Ajoyib! Mijozga yetib kelganingiz haqida xabar berildi. Yo'lingiz bexatar bo'lsin! 🏁")
+        
+        # Kelajakda bu yerda mijozga xabar yuborish mantiqini qo'shish mumkin
+        # Hozircha diagnostika uchun log chiqaramiz
+        print(f"Haydovchi {message.from_user.id} manzilga yetib keldi.")
 
 async def main():
     await dp.start_polling(bot)
@@ -121,3 +123,4 @@ if __name__ == "__main__":
         asyncio.run(main())
     except (KeyboardInterrupt, SystemExit):
         pass
+
