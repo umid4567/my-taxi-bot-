@@ -64,17 +64,36 @@ async def set_role(callback: types.CallbackQuery):
 @dp.message(F.location)
 async def handle_location(message: Message):
     uid = message.from_user.id
-    lat, lon = message.location.latitude, message.location.longitude
-    requests.put(f"{BASE_URL}orders/{uid}.json", json={"lat": lat, "lon": lon, "name": message.from_user.full_name})
-    await message.answer("🚕 Buyurtma yuborildi...")
+    lat = message.location.latitude
+    lon = message.location.longitude
     
+    # 1. Buyurtmani bazaga saqlaymiz
+    requests.put(f"{BASE_URL}orders/{uid}.json", json={
+        "lat": lat, 
+        "lon": lon, 
+        "name": message.from_user.full_name
+    })
+    
+    await message.answer("🚕 Buyurtmangiz haydovchilarga yuborildi. Iltimos kuting...")
+    
+    # 2. Hamma haydovchilarga xabar yuboramiz
     all_users = requests.get(f"{BASE_URL}users.json").json() or {}
     for d_id, data in all_users.items():
         if data.get("role") == "driver":
+            # DIQQAT: Mana shu yerda lat va lon-ni callback_data ichiga qo'shish shart!
             kb_h = InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="✅ Qabul qilish", callback_data=f"accept_{uid}_{lat}_{lon}")]
+                [InlineKeyboardButton(
+                    text="✅ Qabul qilish", 
+                    callback_data=f"accept_{uid}_{lat}_{lon}" # SHU YERDA XATO BO'LSA MARSHRUT CHIZILMAYDI
+                )]
             ])
-            await bot.send_message(d_id, f"🔔 Yangi buyurtma: {message.from_user.full_name}", reply_markup=kb_h)
+            
+            await bot.send_message(
+                d_id, 
+                f"🔔 **Yangi buyurtma!**\n👤 Yo'lovchi: {message.from_user.full_name}", 
+                reply_markup=kb_h
+            )
+
 
 # --- 5. QABUL QILISH (WEB APP MARSHRUT BILAN) ---
 @dp.callback_query(F.data.startswith("accept_"))
