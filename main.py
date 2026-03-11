@@ -114,4 +114,22 @@ async def accept_order(callback: types.CallbackQuery):
     ])
     await bot.send_message(c_id, "🚕 Haydovchi yo'lga chiqdi!", reply_markup=kb_p)
 
+async def main():
+    # Render-ni aldash uchun serverni fonda yurgizamiz
+    asyncio.create_task(start_web_server())
+    
+    # Botni ishga tushiramiz
+    print("Bot ishga tushdi...")
+    await dp.start_polling(bot, skip_updates=True)
+
+if __name__ == "__main__":
+    # Render-da xatolik bermasligi uchun 
+    import asyncio
+    loop = asyncio.get_event_loop()
+    try:
+        loop.run_until_complete(main())
+    except KeyboardInterrupt:
+        pass
+
+
 #
