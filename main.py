@@ -6,15 +6,17 @@ from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import CommandStart, Command
 from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 
-# --- SOZLAMALAR ---
+# --- 1. SOZLAMALAR ---
 TOKEN = os.getenv("BOT_TOKEN") 
 BASE_URL = "https://umut-taxi-default-rtdb.europe-west1.firebasedatabase.app/"
-XARITA_LINKI = "https://umid4567.github.io/my-taxi-bot/" 
+# Web App manzillaringiz (GitHub Pages linki)
+XARITA_LINKI = "https://umid4567.github.io/my-taxi-bot/index.html" 
+PASSENGER_LINKI = "https://umid4567.github.io/my-taxi-bot/passenger.html"
 
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
 
-# --- FIREBASE BILAN TEZKOR ISHLASH (AIOHTTP) ---
+# --- 2. FIREBASE BILAN ASINXRON ISHLASH ---
 async def firebase_get(path):
     async with aiohttp.ClientSession() as session:
         async with session.get(f"{BASE_URL}{path}.json") as resp:
@@ -30,26 +32,16 @@ async def firebase_delete(path):
         async with session.delete(f"{BASE_URL}{path}.json") as resp:
             return await resp.json()
 
-# --- RENDER UCHUN SOXTA SERVER ---
+# --- 3. RENDER UCHUN PORT VA STATUS ---
 async def handle(request):
-    return web.Response(text="Bot is running!")
+    return web.Response(text="AXI TAXI Bot is running!")
 
-async def start_web_server():
-    app = web.Application()
-    app.router.add_get("/", handle)
-    runner = web.AppRunner(app)
-    await runner.setup()
-    
-    # Render aynan shu 10000 portni ko'p so'raydi
-    port = int(os.environ.get("PORT", 10000)) 
-    
-    # 0.0.0.0 — bu hamma tomondan eshikni ochiq qoldirish degani
-    site = web.TCPSite(runner, "0.0.0.0", port)
-    await site.start()
-    print(f"Render uchun soxta server {port}-portda yondi!")
+async def on_startup(app):
+    # Bot polling-ni fonda ishga tushiramiz
+    asyncio.create_task(dp.start_polling(bot, skip_updates=True))
+    print("🚀 Bot va Server birga zavod bo'ldi!")
 
-
-# --- START KOMANDASI ---
+# --- 4. BOT KOMANDALARI ---
 @dp.message(CommandStart())
 async def cmd_start(message: Message):
     uid = message.from_user.id
@@ -72,9 +64,8 @@ async def cmd_start(message: Message):
             [InlineKeyboardButton(text="🚖 Men yo'lovchiman", callback_data="set_role_client")],
             [InlineKeyboardButton(text="🚕 Men haydovchiman", callback_data="set_role_driver")]
         ])
-        await message.answer("Xush kelibsiz! Rolingizni tanlang:", reply_markup=kb_start)
+        await message.answer("Xush kelibsiz! Ro'yxatdan o'ting:", reply_markup=kb_start)
 
-# --- ROLNI SOZLASH ---
 @dp.callback_query(F.data.startswith("set_role_"))
 async def set_role(callback: types.CallbackQuery):
     role = callback.data.split("_")[2]
@@ -83,7 +74,13 @@ async def set_role(callback: types.CallbackQuery):
     await callback.message.answer(f"✅ Saqlandi! /start bosing.")
     await callback.answer()
 
-# --- BUYURTMA (YO'LOVCHI) ---
+@dp.message(F.text == "🔄 Rolni o'zgartirish")
+async def reset_role(message: Message):
+    uid = message.from_user.id
+    await firebase_delete(f"users/{uid}")
+    await message.answer("Rolingiz o'chirildi. /start bosing.")
+
+# --- 5. BUYURTMA VA QABUL QILISH ---
 @dp.message(F.location)
 async def handle_location(message: Message):
     uid = message.from_user.id
@@ -100,42 +97,21 @@ async def handle_location(message: Message):
             try: await bot.send_message(d_id, f"🔔 Yangi buyurtma!\n👤: {message.from_user.full_name}", reply_markup=kb)
             except: continue
 
-# --- QABUL QILISH (HAYDOVCHI) ---
 @dp.callback_query(F.data.startswith("accept_"))
 async def accept_order(callback: types.CallbackQuery):
     _, c_id, c_lat, c_lon = callback.data.split("_")
     await firebase_delete(f"orders/{c_id}")
     
-    # Haydovchiga Web App (Taksimetr) yuboramiz
-    url = f"{XARITA_LINKI}?order_id={c_id}&clat={c_lat}&clon={c_lon}"
-    kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🚕 Taksimetrni ochish", web_app=WebAppInfo(url=url))]
-    ])
-    await callback.message.edit_text("✅ Safar boshlanishiga tayyor!", reply_markup=kb)
+    order_id = f"{c_id}_{int(asyncio.get_event_loop().time())}"
     
-    # Yo'lovchiga xabar (Siz ochgan passenger.html ssilkasi)
-    p_url = f"https://umid4567.github.io/my-taxi-bot/passenger.html?order_id={c_id}"
-    kb_p = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🗺 Xaritada kuzatish", web_app=WebAppInfo(url=p_url))]
+    # Haydovchiga Web App (Taksimetr)
+    driver_url = f"{XARITA_LINKI}?order_id={order_id}&clat={c_lat}&clon={c_lon}"
+    kb_d = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🚕 Taksimetrni ochish", web_app=WebAppInfo(url=driver_url))]
     ])
-    await bot.send_message(c_id, "🚕 Haydovchi yo'lga chiqdi!", reply_markup=kb_p)
-
-async def main():
-    # Render-ni aldash uchun serverni fonda yurgizamiz
-    asyncio.create_task(start_web_server())
+    await callback.message.edit_text("✅ Safar boshlanishiga tayyor!", reply_markup=kb_d)
     
-    # Botni ishga tushiramiz
-    print("Bot ishga tushdi...")
-    await dp.start_polling(bot, skip_updates=True)
+    # Yo'lovchiga kuzatuv xaritasi
+    pass_url = f"{PASSENGER_LINKI}?order_id={order_id}"
+    kb_p = Inline
 
-if __name__ == "__main__":
-    # Render-da xatolik bermasligi uchun 
-    import asyncio
-    loop = asyncio.get_event_loop()
-    try:
-        loop.run_until_complete(main())
-    except KeyboardInterrupt:
-        pass
-
-
-#
