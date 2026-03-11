@@ -117,23 +117,39 @@ async def accept_order(callback: types.CallbackQuery):
     await bot.send_message(c_id, "🚕 Haydovchi buyurtmani qabul qildi va yo'lga chiqdi!")
     await callback.answer()
 
-# --- 5. WEB APP'DAN MA'LUMOT QABUL QILISH (YANGILANGAN) ---
+# --- 5. WEB APP'DAN MA'LUMOT QABUL QILISH (TO'LIQ VARIANT) ---
 @dp.message(F.web_app_data)
 async def handle_webapp_data(message: Message):
+    # Web App'dan kelgan tekstni olamiz
     result = message.web_app_data.data
     
-    # 1. Haydovchi manzilga yetib borganda
+    # 1. Agar haydovchi manzilga yetib borsa
     if result.startswith("arrived_"):
-        await message.answer("🏁 Siz manzilga yetib keldingiz. Mijoz chiqishi bilan 'Safarni boshlash' tugmasini bosing.")
-    
-    # 2. Safar boshlanganda
-    elif result.startswith("trip_started_"):
-        await message.answer("🚀 Safar boshlandi! Taksimetr ishga tushdi. Yo'lingiz bexatar bo'lsin!")
+        await message.answer("🏁 Siz manzilga yetib keldingiz. Mijoz chiqib o'tirishi bilan xaritada 'Safarni boshlash' tugmasini bosing.")
 
-    # 3. Safar yakunlanganda (Aniq summa bilan)
+    # 2. Agar safar boshlansa
+    elif result.startswith("trip_started_"):
+        await message.answer("🚀 Safar boshlandi! Taksimetr ishga tushdi, yo'lingiz bexatar bo'lsin!")
+
+    # 3. Agar safar yakunlansa (Mana shu joyi sizda ishlamayotgan edi)
     elif result.startswith("finish_"):
-        summa = result.split("_")[1]
-        await message.answer(f"✅ Safar yakunlandi!\n💰 Jami summa: {summa} so'm.\n\nBaraka toping, Umid aka! Yangi buyurtmalarni kutishingiz mumkin.")
+        try:
+            # "finish_15000" ko'rinishidagi tekstdan summani ajratib olamiz
+            parts = result.split("_")
+            summa = parts[1] if len(parts) > 1 else "0"
+            
+            # Haydovchiga yakuniy xabarni yuboramiz
+            text = (
+                f"✅ Safar yakunlandi!\n"
+                f"💰 Jami summa: {summa} so'm\n\n"
+                f"Baraka toping, Umid aka! Yangi buyurtmalarni kutishingiz mumkin."
+            )
+            await message.answer(text)
+            
+        except Exception as e:
+            await message.answer("✅ Safar yakunlandi, lekin narxni hisoblashda xatolik bo'ldi.")
+            print(f"Xatolik: {e}")
+
         
         # Bu yerda summani bazaga (Firebase) yozib qo'yish ham mumkin
         # Haydovchining kunlik ishlagan pulini hisoblash uchun
