@@ -39,9 +39,15 @@ async def start_web_server():
     app.router.add_get("/", handle)
     runner = web.AppRunner(app)
     await runner.setup()
-    port = int(os.environ.get("PORT", 8080))
+    
+    # Render aynan shu 10000 portni ko'p so'raydi
+    port = int(os.environ.get("PORT", 10000)) 
+    
+    # 0.0.0.0 — bu hamma tomondan eshikni ochiq qoldirish degani
     site = web.TCPSite(runner, "0.0.0.0", port)
     await site.start()
+    print(f"Render uchun soxta server {port}-portda yondi!")
+
 
 # --- START KOMANDASI ---
 @dp.message(CommandStart())
