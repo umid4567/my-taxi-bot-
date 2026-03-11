@@ -1,6 +1,7 @@
 import os
 import asyncio
 import requests
+from aiohttp import web # SHU YERDA YANGI QISMI
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import CommandStart, Command
 from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
@@ -12,6 +13,21 @@ XARITA_LINKI = "https://umid4567.github.io/my-taxi-bot/"
 
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
+
+# --- RENDER UCHUN SOXTA SERVER (PORT MUAMMOSINI HAL QILISH) ---
+async def handle(request):
+    return web.Response(text="Bot is running!")
+
+async def start_web_server():
+    app = web.Application()
+    app.router.add_get("/", handle)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    # Render o'zi beradigan portni oladi (odatda 10000)
+    port = int(os.environ.get("PORT", 8080))
+    site = web.TCPSite(runner, "0.0.0.0", port)
+    await site.start()
+    print(f"Web server started on port {port}")
 
 # --- 1. START KOMANDASI ---
 @dp.message(CommandStart())
@@ -101,21 +117,18 @@ async def accept_order(callback: types.CallbackQuery):
     await bot.send_message(c_id, "🚕 Haydovchi buyurtmani qabul qildi va yo'lga chiqdi!")
     await callback.answer()
 
-# --- 5. WEB APP'DAN MA'LUMOT QABUL QILISH ("KELDIM" TUGMASI) ---
+# --- 5. WEB APP'DAN MA'LUMOT ---
 @dp.message(F.web_app_data)
 async def handle_webapp_data(message: Message):
-    # Web App'dan kelgan ma'lumotni olamiz
     result = message.web_app_data.data
-    
     if result.startswith("arrived_"):
-        # Haydovchiga javob qaytaramiz
         await message.answer("✅ Ajoyib! Mijozga yetib kelganingiz haqida xabar berildi. Yo'lingiz bexatar bo'lsin! 🏁")
-        
-        # Kelajakda bu yerda mijozga xabar yuborish mantiqini qo'shish mumkin
-        # Hozircha diagnostika uchun log chiqaramiz
-        print(f"Haydovchi {message.from_user.id} manzilga yetib keldi.")
 
+# --- ASOSIY MAIN FUNKSIYASI ---
 async def main():
+    # Render kutayotgan soxta serverni ishga tushiramiz
+    asyncio.create_task(start_web_server())
+    # Botni ishga tushiramiz
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
@@ -123,4 +136,3 @@ if __name__ == "__main__":
         asyncio.run(main())
     except (KeyboardInterrupt, SystemExit):
         pass
-
