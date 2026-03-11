@@ -8,7 +8,6 @@ from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton, InlineKe
 # --- SOZLAMALAR ---
 TOKEN = os.getenv("BOT_TOKEN") 
 BASE_URL = "https://umut-taxi-default-rtdb.europe-west1.firebasedatabase.app/"
-# GitHubdagi xarita manzilingiz
 XARITA_LINKI = "https://umid4567.github.io/my-taxi-bot/" 
 
 bot = Bot(token=TOKEN)
@@ -64,11 +63,9 @@ async def set_role(callback: types.CallbackQuery):
 @dp.message(F.location)
 async def handle_location(message: Message):
     uid = message.from_user.id
-    # Koordinatalarni 5 ta raqamgacha yaxlitlaymiz (bu 1 metrgacha aniqlik beradi)
     lat = round(message.location.latitude, 5)
     lon = round(message.location.longitude, 5)
     
-    # 1. Buyurtmani bazaga saqlaymiz
     requests.put(f"{BASE_URL}orders/{uid}.json", json={
         "lat": lat, 
         "lon": lon, 
@@ -77,10 +74,8 @@ async def handle_location(message: Message):
     
     await message.answer("🚕 Buyurtmangiz yuborildi. Iltimos kuting...")
     
-    # 2. Haydovchilarga xabar yuborish
     all_users = requests.get(f"{BASE_URL}users.json").json() or {}
     for d_id, data in all_users.items():
-        # d_id raqam bo'lishi kerak, user o'ziga yubormasligi uchun tekshiramiz
         if data.get("role") == "driver":
             kb_h = InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(
@@ -88,41 +83,41 @@ async def handle_location(message: Message):
                     callback_data=f"accept_{uid}_{lat}_{lon}" 
                 )]
             ])
-            
             try:
                 await bot.send_message(
                     d_id, 
                     f"🔔 **Yangi buyurtma!**\n👤 Yo'lovchi: {message.from_user.full_name}", 
                     reply_markup=kb_h
                 )
-            except Exception as e:
-                print(f"Xatolik: {d_id} ga xabar ketmadi")
+            except Exception:
+                continue
 
-
-
-# --- 5. QABUL QILISH (WEB APP MARSHRUT BILAN) ---
+# --- 5. QABUL QILISH ---
 @dp.callback_query(F.data.startswith("accept_"))
 async def accept_order(callback: types.CallbackQuery):
     data = callback.data.split("_")
-    c_id = data[1]
-    c_lat = data[2]
-    c_lon = data[3]
-    
+    # Agar data ichida koordinatalar bo'lmasa, xato bermasligi uchun tekshiramiz
+    if len(data) < 4:
+        await callback.answer("⚠️ Ma'lumot yetarli emas!", show_alert=True)
+        return
+
+    c_id, c_lat, c_lon = data[1], data[2], data[3]
     requests.delete(f"{BASE_URL}orders/{c_id}.json")
     
-    # Marshrut linki: haydovchi xaritani ochganda mijoz koordinatalarini olib ketadi
     marshrut_link = f"{XARITA_LINKI}?clat={c_lat}&clon={c_lon}"
-    
     kb_app = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🗺 Marshrutni ko'rish (Botda)", web_app=WebAppInfo(url=marshrut_link))]
+        [InlineKeyboardButton(text="🗺 Marshrutni ko'rish", web_app=WebAppInfo(url=marshrut_link))]
     ])
     
     await callback.message.edit_text("✅ Buyurtma qabul qilindi!", reply_markup=kb_app)
-    await bot.send_message(c_id, "🚕 Haydovchi yo'lga chiqdi!")
+    await bot.send_message(c_id, "🚕 Haydovchi buyurtmani qabul qildi!")
     await callback.answer()
 
 async def main():
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except (KeyboardInterrupt, SystemExit):
+        pass
