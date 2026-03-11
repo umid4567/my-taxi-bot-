@@ -64,8 +64,9 @@ async def set_role(callback: types.CallbackQuery):
 @dp.message(F.location)
 async def handle_location(message: Message):
     uid = message.from_user.id
-    lat = message.location.latitude
-    lon = message.location.longitude
+    # Koordinatalarni 5 ta raqamgacha yaxlitlaymiz (bu 1 metrgacha aniqlik beradi)
+    lat = round(message.location.latitude, 5)
+    lon = round(message.location.longitude, 5)
     
     # 1. Buyurtmani bazaga saqlaymiz
     requests.put(f"{BASE_URL}orders/{uid}.json", json={
@@ -74,25 +75,29 @@ async def handle_location(message: Message):
         "name": message.from_user.full_name
     })
     
-    await message.answer("🚕 Buyurtmangiz haydovchilarga yuborildi. Iltimos kuting...")
+    await message.answer("🚕 Buyurtmangiz yuborildi. Iltimos kuting...")
     
-    # 2. Hamma haydovchilarga xabar yuboramiz
+    # 2. Haydovchilarga xabar yuborish
     all_users = requests.get(f"{BASE_URL}users.json").json() or {}
     for d_id, data in all_users.items():
+        # d_id raqam bo'lishi kerak, user o'ziga yubormasligi uchun tekshiramiz
         if data.get("role") == "driver":
-            # DIQQAT: Mana shu yerda lat va lon-ni callback_data ichiga qo'shish shart!
             kb_h = InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(
                     text="✅ Qabul qilish", 
-                    callback_data=f"accept_{uid}_{lat}_{lon}" # SHU YERDA XATO BO'LSA MARSHRUT CHIZILMAYDI
+                    callback_data=f"accept_{uid}_{lat}_{lon}" 
                 )]
             ])
             
-            await bot.send_message(
-                d_id, 
-                f"🔔 **Yangi buyurtma!**\n👤 Yo'lovchi: {message.from_user.full_name}", 
-                reply_markup=kb_h
-            )
+            try:
+                await bot.send_message(
+                    d_id, 
+                    f"🔔 **Yangi buyurtma!**\n👤 Yo'lovchi: {message.from_user.full_name}", 
+                    reply_markup=kb_h
+                )
+            except Exception as e:
+                print(f"Xatolik: {d_id} ga xabar ketmadi")
+
 
 
 # --- 5. QABUL QILISH (WEB APP MARSHRUT BILAN) ---
