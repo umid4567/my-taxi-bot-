@@ -117,12 +117,27 @@ async def accept_order(callback: types.CallbackQuery):
     await bot.send_message(c_id, "🚕 Haydovchi buyurtmani qabul qildi va yo'lga chiqdi!")
     await callback.answer()
 
-# --- 5. WEB APP'DAN MA'LUMOT ---
+# --- 5. WEB APP'DAN MA'LUMOT QABUL QILISH (YANGILANGAN) ---
 @dp.message(F.web_app_data)
 async def handle_webapp_data(message: Message):
     result = message.web_app_data.data
+    
+    # 1. Haydovchi manzilga yetib borganda
     if result.startswith("arrived_"):
-        await message.answer("✅ Ajoyib! Mijozga yetib kelganingiz haqida xabar berildi. Yo'lingiz bexatar bo'lsin! 🏁")
+        await message.answer("🏁 Siz manzilga yetib keldingiz. Mijoz chiqishi bilan 'Safarni boshlash' tugmasini bosing.")
+    
+    # 2. Safar boshlanganda
+    elif result.startswith("trip_started_"):
+        await message.answer("🚀 Safar boshlandi! Taksimetr ishga tushdi. Yo'lingiz bexatar bo'lsin!")
+
+    # 3. Safar yakunlanganda (Aniq summa bilan)
+    elif result.startswith("finish_"):
+        summa = result.split("_")[1]
+        await message.answer(f"✅ Safar yakunlandi!\n💰 Jami summa: {summa} so'm.\n\nBaraka toping, Umid aka! Yangi buyurtmalarni kutishingiz mumkin.")
+        
+        # Bu yerda summani bazaga (Firebase) yozib qo'yish ham mumkin
+        # Haydovchining kunlik ishlagan pulini hisoblash uchun
+
 
 # --- ASOSIY MAIN FUNKSIYASI ---
 async def main():
