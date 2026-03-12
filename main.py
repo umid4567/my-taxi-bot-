@@ -1,10 +1,9 @@
 import os
 import asyncio
 import requests
-import time
 from aiohttp import web
 from aiogram import Bot, Dispatcher, types, F
-from aiogram.filters import CommandStart, Command
+from aiogram.filters import CommandStart
 from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 
 # --- SOZLAMALAR ---
@@ -16,9 +15,9 @@ XARITA_LINKI = "https://umid4567.github.io/my-taxi-bot"
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
 
-# --- RENDER UCHUN SOXTA SERVER ---
+# --- RENDER UCHUN SERVER (Bot o'chib qolmasligi uchun) ---
 async def handle(request):
-    return web.Response(text="Bot is running!")
+    return web.Response(text="Axi Taxi Bot is running!")
 
 async def start_web_server():
     app = web.Application()
@@ -29,9 +28,9 @@ async def start_web_server():
     site = web.TCPSite(runner, "0.0.0.0", port)
     await site.start()
 
-# --- 1. KUZATUVCHI (MIJOZGA XABAR YUBORISH) ---
+# --- 1. KUZATUVCHI (MIJOZGA XABAR YUBORISH TIZIMI) ---
 async def watch_all_events():
-    """Mijozga xabar yuborish tizimi - ENG ANIQLASHTIRILGAN VERSIYA"""
+    """Mijozga haydovchi qabul qilgani haqida xabar yuborish"""
     print("✅ Kuzatuv tizimi ishga tushdi...")
     while True:
         try:
@@ -42,12 +41,12 @@ async def watch_all_events():
                 
                 if res:
                     for uid, data in res.items():
-                        # Diqqat: status 'accepted' bo'lishi va notified True bo'lmasligi kerak
+                        # Status 'accepted' bo'lishi va notified True bo'lmasligi kerak
                         status = data.get("status")
                         notified = data.get("client_notified")
 
-                        if status == "accepted" and notified is not True:
-                            # 1. Linkni to'g'ri shakllantirish
+                        if status == "accepted" and (notified is False or notified is None):
+                            # Linkni shakllantirish
                             kuzatish_url = f"{XARITA_LINKI}/passenger.html?order_id={uid}"
                             
                             kb = InlineKeyboardMarkup(inline_keyboard=[
@@ -64,25 +63,17 @@ async def watch_all_events():
                                 # MUHIM: chat_id ni string (matn) shaklida yuboramiz
                                 await bot.send_message(chat_id=str(uid), text=text, reply_markup=kb, parse_mode="Markdown")
                                 
-                                # 2. Bazada flagni o'zgartiramiz
+                                # Bazada flagni o'zgartiramiz (Patch orqali)
                                 patch_url = f"{BASE_URL}orders/{uid}.json"
-                                patch_res = requests.patch(patch_url, json={"client_notified": True})
-                                
-                                if patch_res.status_code == 200:
-                                    print(f"📧 Bildirishnoma yuborildi: {uid}")
-                                else:
-                                    print(f"❌ Firebase flag yangilanmadi: {uid}")
-                                    
+                                requests.patch(patch_url, json={"client_notified": True})
+                                print(f"📧 Bildirishnoma yuborildi: {uid}")
                             except Exception as send_err:
                                 print(f"❌ Xabar ketmadi ({uid}): {send_err}")
-            else:
-                print(f"📡 Firebase ulanishda xato: {response.status_code}")
-
+            
         except Exception as e:
             print(f"⚠️ Kuzatuvda xatolik: {e}")
             
-        await asyncio.sleep(5)
-
+        await asyncio.sleep(4) # Tekshirish oralig'i
 
 # --- 2. START KOMANDASI ---
 @dp.message(CommandStart())
@@ -110,14 +101,21 @@ async def cmd_start(message: Message):
         ])
         await message.answer("Rolingizni tanlang:", reply_markup=kb_start)
 
-# --- 3. BUYURTMA BERISH ---
+# --- 3. BUYURTMA BERISH (LOKATSIYA QABUL QILISH) ---
 @dp.message(F.location)
 async def handle_location(message: Message):
     uid = message.from_user.id
     lat, lon = message.location.latitude, message.location.longitude
     full_name = message.from_user.full_name
     
-    order_data = {"lat": lat, "lon": lon, "name": full_name, "status": "waiting", "client_notified": False}
+    # Yangi buyurtma yaratish
+    order_data = {
+        "lat": lat, 
+        "lon": lon, 
+        "name": full_name, 
+        "status": "waiting", 
+        "client_notified": False
+    }
     requests.put(f"{BASE_URL}orders/{uid}.json", json=order_data)
     
     kb_cancel = InlineKeyboardMarkup(inline_keyboard=[
@@ -125,13 +123,14 @@ async def handle_location(message: Message):
     ])
     await message.answer("🚕 Buyurtma yuborildi. Haydovchi kutilmoqda...", reply_markup=kb_cancel)
     
+    # Haydovchilarga bildirish yuborish
     all_users = requests.get(f"{BASE_URL}users.json").json() or {}
     for d_id, d_data in all_users.items():
         if d_data.get("role") == "driver":
             driver_url = f"{XARITA_LINKI}/index.html?order_id={uid}&clat={lat}&clon={lon}"
             client_link = f"tg://user?id={uid}"
             
-            # YANDEX MAPS LINKI
+            # YANDEX MAPS LINKI (Mijozning nuqtasi)
             yandex_map_url = f"https://yandex.uz/maps/?pt={lon},{lat}&z=16&l=map"
             
             kb_drv = InlineKeyboardMarkup(inline_keyboard=[
@@ -140,7 +139,11 @@ async def handle_location(message: Message):
                 [InlineKeyboardButton(text="📍 Yandex Xarita", url=yandex_map_url)]
             ])
             
-            msg_text = f"🔔 **Yangi buyurtma!**\n👤 Mijoz: {full_name}"
+            msg_text = (
+                f"🔔 **Yangi buyurtma!**\n\n"
+                f"👤 Mijoz: {full_name}\n"
+                f"📍 Manzilni Yandex orqali ko'rish uchun pastdagi tugmani bosing."
+            )
             try:
                 await bot.send_message(d_id, msg_text, reply_markup=kb_drv, parse_mode="Markdown")
             except: continue
@@ -164,10 +167,14 @@ async def reset_user(message: Message):
     requests.delete(f"{BASE_URL}users/{message.from_user.id}.json")
     await message.answer("Rolingiz o'chirildi. /start bosing.")
 
+# --- ASOSIY ISHGA TUSHIRISH ---
 async def main():
     asyncio.create_task(start_web_server())
     asyncio.create_task(watch_all_events())
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except (KeyboardInterrupt, SystemExit):
+        print("Bot to'xtatildi!")
