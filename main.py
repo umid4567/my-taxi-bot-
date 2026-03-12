@@ -101,21 +101,34 @@ async def handle_location(message: Message):
 @dp.callback_query(F.data.startswith("accept_"))
 async def accept_order(callback: types.CallbackQuery):
     data = callback.data.split("_")
-    if len(data) < 4:
-        await callback.answer("⚠️ Ma'lumot yetarli emas!", show_alert=True)
-        return
-
+    # data[1] - bu yo'lovchining IDsi (c_id)
+    # data[2], data[3] - mijozning turgan joyi
     c_id, c_lat, c_lon = data[1], data[2], data[3]
+    
+    # Bazadan buyurtmani o'chirib, "safar" boshlanganini belgilaymiz
     requests.delete(f"{BASE_URL}orders/{c_id}.json")
     
-    marshrut_link = f"{XARITA_LINKI}?clat={c_lat}&clon={c_lon}"
-    kb_app = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🗺 Marshrutni ko'rish", web_app=WebAppInfo(url=marshrut_link))]
+    # HAYDOVCHI UCHUN LINK (Mijozga borish marshruti bilan)
+    driver_link = f"{XARITA_LINKI}index.html?order_id={c_id}&clat={c_lat}&clon={c_lon}"
+    kb_driver = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🗺 Marshrutni ko'rish", web_app=WebAppInfo(url=driver_link))]
+    ])
+    await callback.message.edit_text("✅ Buyurtma qabul qilindi!", reply_markup=kb_driver)
+
+    # YO'LOVCHI UCHUN LINK (Haydovchini kuzatish uchun)
+    # E'tibor bering: fayl nomi passenger.html bo'lishi shart!
+    passenger_link = f"{XARITA_LINKI}passenger.html?order_id={c_id}"
+    kb_passenger = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🚕 Haydovchini kuzatish", web_app=WebAppInfo(url=passenger_link))]
     ])
     
-    await callback.message.edit_text("✅ Buyurtma qabul qilindi!", reply_markup=kb_app)
-    await bot.send_message(c_id, "🚕 Haydovchi buyurtmani qabul qildi va yo'lga chiqdi!")
+    try:
+        await bot.send_message(c_id, "🚕 Haydovchi buyurtmani qabul qildi!", reply_markup=kb_passenger)
+    except Exception as e:
+        print(f"Yo'lovchiga xabar yuborishda xato: {e}")
+        
     await callback.answer()
+
 
 # --- 5. WEB APP'DAN MA'LUMOT ---
 @dp.message(F.web_app_data)
