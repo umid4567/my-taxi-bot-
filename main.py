@@ -10,7 +10,8 @@ from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton, InlineKe
 # --- SOZLAMALAR ---
 TOKEN = os.getenv("BOT_TOKEN") 
 BASE_URL = "https://umut-taxi-default-rtdb.europe-west1.firebasedatabase.app/"
-XARITA_LINKI = "https://umid4567.github.io/my-taxi-bot/" 
+# DIQQAT: Link oxirida / bo'lmasligi kerak!
+XARITA_LINKI = "https://umid4567.github.io/my-taxi-bot" 
 
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
@@ -30,39 +31,34 @@ async def start_web_server():
 
 # --- 1. KUZATUVCHI (MIJOZGA XABAR YUBORISH) ---
 async def watch_all_events():
-    """Mijozga haydovchi qabul qilgani haqida xabar yuborish tizimi"""
     print("✅ Kuzatuv tizimi ishga tushdi...")
     while True:
         try:
-            # Firebase'dan buyurtmalarni olish (keshlanmasligi uchun vaqt qo'shildi)
             res = requests.get(f"{BASE_URL}orders.json").json()
-            
             if res:
                 for uid, data in res.items():
-                    # Status 'accepted' bo'lsa va hali bildirishnoma bormagan bo'lsa
+                    # Status accepted bo'lsa va hali notified bo'lmasa
                     if data.get("status") == "accepted" and data.get("client_notified") is not True:
                         
-                        kuzatish_url = f"{XARITA_LINKI}passenger.html?order_id={uid}"
+                        # TO'G'RI LINK FORMATI
+                        kuzatish_url = f"{XARITA_LINKI}/passenger.html?order_id={uid}"
+                        
                         kb = InlineKeyboardMarkup(inline_keyboard=[
                             [InlineKeyboardButton(text="🚕 Haydovchini kuzatish", web_app=WebAppInfo(url=kuzatish_url))]
                         ])
                         
-                        text = "🚕 **Xushxabar!** Buyurtmangiz qabul qilindi.\n\nHaydovchi yo'lga chiqdi. Pastdagi tugma orqali uni xaritada kuzatishingiz mumkin."
+                        text = "🚕 **Buyurtmangiz qabul qilindi!**\n\nHaydovchi yo'lga chiqdi. Pastdagi tugma orqali uni xaritada jonli kuzatishingiz mumkin."
                         
                         try:
-                            # Mijozga xabar yuborish
                             await bot.send_message(chat_id=uid, text=text, reply_markup=kb, parse_mode="Markdown")
-                            
-                            # Qayta yubormaslik uchun bazada belgilab qo'yish
                             requests.patch(f"{BASE_URL}orders/{uid}.json", json={"client_notified": True})
-                            print(f"📧 Mijozga ({uid}) bildirishnoma yuborildi.")
-                        except Exception as send_err:
-                            print(f"❌ Xabar yuborishda xato ({uid}): {send_err}")
+                            print(f"📧 Bildirishnoma yuborildi: {uid}")
+                        except Exception as e:
+                            print(f"❌ Xabar ketmadi: {e}")
                             
         except Exception as e:
-            print(f"⚠️ Kuzatuvda xatolik: {e}")
-            
-        await asyncio.sleep(5) # Telegram qotmasligi uchun ideal vaqt
+            print(f"⚠️ Xatolik: {e}")
+        await asyncio.sleep(5)
 
 # --- 2. START KOMANDASI ---
 @dp.message(CommandStart())
@@ -72,8 +68,8 @@ async def cmd_start(message: Message):
 
     if user_data and user_data.get("role") == "driver":
         kb = ReplyKeyboardMarkup(keyboard=[
-            [KeyboardButton(text="🚖 Yangi buyurtmalarni kutish", 
-                            web_app=WebAppInfo(url=f"{XARITA_LINKI}driver_db.html?driver_id={uid}"))],
+            [KeyboardButton(text="🚖 Buyurtmalarni kutish", 
+                            web_app=WebAppInfo(url=f"{XARITA_LINKI}/driver_db.html?driver_id={uid}"))],
             [KeyboardButton(text="🔄 Rolni o'zgartirish")]
         ], resize_keyboard=True)
         await message.answer(f"Salom haydovchi {user_data.get('name')}!", reply_markup=kb)
@@ -97,32 +93,32 @@ async def handle_location(message: Message):
     lat, lon = message.location.latitude, message.location.longitude
     full_name = message.from_user.full_name
     
-    # Yangi buyurtma yaratish (barcha xabarlarni reset qilib)
-    order_data = {
-        "lat": lat, 
-        "lon": lon, 
-        "name": full_name, 
-        "status": "waiting",
-        "client_notified": False, # Xabarlarni yangilash
-        "msg_sent": False
-    }
+    order_data = {"lat": lat, "lon": lon, "name": full_name, "status": "waiting", "client_notified": False}
     requests.put(f"{BASE_URL}orders/{uid}.json", json=order_data)
     
     kb_cancel = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="❌ Buyurtmani bekor qilish", callback_data=f"cancel_{uid}")]
+        [InlineKeyboardButton(text="❌ Bekor qilish", callback_data=f"cancel_{uid}")]
     ])
     await message.answer("🚕 Buyurtma yuborildi. Haydovchi kutilmoqda...", reply_markup=kb_cancel)
     
-    # Haydovchilarga bildirish yuborish
     all_users = requests.get(f"{BASE_URL}users.json").json() or {}
     for d_id, d_data in all_users.items():
         if d_data.get("role") == "driver":
-            driver_url = f"{XARITA_LINKI}index.html?order_id={uid}&clat={lat}&clon={lon}"
+            driver_url = f"{XARITA_LINKI}/index.html?order_id={uid}&clat={lat}&clon={lon}"
+            client_link = f"tg://user?id={uid}"
+            
+            # YANDEX MAPS LINKI
+            yandex_map_url = f"https://yandex.uz/maps/?pt={lon},{lat}&z=16&l=map"
+            
             kb_drv = InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="✅ Qabul qilish", web_app=WebAppInfo(url=driver_url))]
+                [InlineKeyboardButton(text="✅ Qabul qilish", web_app=WebAppInfo(url=driver_url))],
+                [InlineKeyboardButton(text="💬 Mijoz bilan bog'lanish", url=client_link)],
+                [InlineKeyboardButton(text="📍 Yandex Xarita", url=yandex_map_url)]
             ])
+            
+            msg_text = f"🔔 **Yangi buyurtma!**\n👤 Mijoz: {full_name}"
             try:
-                await bot.send_message(d_id, f"🔔 **Yangi buyurtma!**\n👤 Mijoz: {full_name}", reply_markup=kb_drv, parse_mode="Markdown")
+                await bot.send_message(d_id, msg_text, reply_markup=kb_drv, parse_mode="Markdown")
             except: continue
 
 @dp.callback_query(F.data.startswith("cancel_"))
