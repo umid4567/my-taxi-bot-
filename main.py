@@ -28,7 +28,7 @@ async def start_web_server():
     await site.start()
 
 # --- 1. KUZATUVCHI ---
-    async def watch_all_events():
+async def watch_all_events():
     print("🚀 Kuzatuv tizimi ishga tushdi...")
     while True:
         try:
@@ -37,14 +37,11 @@ async def start_web_server():
             
             if orders:
                 for order_id, data in orders.items():
-                    # Statusni tekshiramiz: haydovchi qabul qilgan bo'lishi kerak
-                    # Ba'zida JS statusni 'accepted' o'rniga 'coming' qilib qo'yishi mumkin
                     current_status = data.get("status")
                     
                     if current_status in ["accepted", "coming"] and data.get("client_notified") is not True:
                         print(f"🔔 Mijoz {order_id} uchun kuzatuv tugmasi tayyorlanmoqda...")
                         
-                        # HAVOLANI TEKSHIRING: Oxirida .html borligiga va yo'l to'g'riligiga
                         kuzatish_url = f"{XARITA_LINKI}/passenger.html?order_id={order_id}"
                         
                         kb = InlineKeyboardMarkup(inline_keyboard=[
@@ -55,12 +52,10 @@ async def start_web_server():
                         
                         try:
                             await bot.send_message(chat_id=order_id, text=text, reply_markup=kb, parse_mode="Markdown")
-                            # Bildirishnoma ketganini belgilash
                             requests.patch(f"{BASE_URL}orders/{order_id}.json", json={"client_notified": True})
                             print(f"✅ Mijozga xabar yuborildi: {order_id}")
                         except Exception as e:
                             print(f"❌ Telegram xabar yubora olmadi: {e}")
-                            # Qayta-qayta urinmasligi uchun bloklangan bo'lsa ham True qilamiz
                             requests.patch(f"{BASE_URL}orders/{order_id}.json", json={"client_notified": True})
             
         except Exception as e:
@@ -73,7 +68,11 @@ async def start_web_server():
 @dp.message(CommandStart())
 async def cmd_start(message: Message):
     uid = message.from_user.id
-    user_data = requests.get(f"{BASE_URL}users/{uid}.json").json()
+    try:
+        user_data = requests.get(f"{BASE_URL}users/{uid}.json").json()
+    except:
+        user_data = None
+
     if user_data and user_data.get("role") == "driver":
         kb = ReplyKeyboardMarkup(keyboard=[
             [KeyboardButton(text="🚖 Buyurtmalarni kutish", web_app=WebAppInfo(url=f"{XARITA_LINKI}/driver_db.html?driver_id={uid}"))],
@@ -104,7 +103,11 @@ async def handle_location(message: Message):
     kb_cancel = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="❌ Bekor qilish", callback_data=f"cancel_{uid}")]])
     await message.answer("🚕 Buyurtma yuborildi. Haydovchi kutilmoqda...", reply_markup=kb_cancel)
     
-    all_users = requests.get(f"{BASE_URL}users.json").json() or {}
+    try:
+        all_users = requests.get(f"{BASE_URL}users.json").json() or {}
+    except:
+        all_users = {}
+
     for d_id, d_data in all_users.items():
         if d_data.get("role") == "driver":
             driver_url = f"{XARITA_LINKI}/index.html?order_id={uid}&clat={lat}&clon={lon}"
@@ -114,18 +117,29 @@ async def handle_location(message: Message):
             ])
             try:
                 await bot.send_message(d_id, f"🔔 **Yangi buyurtma!**\n👤: {message.from_user.full_name}", reply_markup=kb_drv, parse_mode="Markdown")
-            except: continue
+            except: 
+                continue
 
 @dp.callback_query(F.data.startswith("set_role_"))
 async def set_role(callback: types.CallbackQuery):
     role = callback.data.split("_")[2]
     requests.put(f"{BASE_URL}users/{callback.from_user.id}.json", json={"role": role, "name": callback.from_user.full_name})
     await callback.message.answer("Saqlandi! /start bosing.")
+    await callback.answer()
 
+@dp.message(F.text == "🔄 Rolni o'zgartirish")
+async def reset_user(message: Message):
+    requests.delete(f"{BASE_URL}users/{message.from_user.id}.json")
+    await message.answer("Rolingiz o'chirildi. /start bosing.")
+
+# --- ASOSIY ISHGA TUSHIRISH ---
 async def main():
     asyncio.create_task(start_web_server())
     asyncio.create_task(watch_all_events())
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except (KeyboardInterrupt, SystemExit):
+        print("Bot to'xtatildi!")
