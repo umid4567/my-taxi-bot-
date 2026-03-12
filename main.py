@@ -30,50 +30,45 @@ async def start_web_server():
 
 # --- 1. KUZATUVCHI (MIJOZGA XABAR YUBORISH TIZIMI) ---
 async def watch_all_events():
-    """Mijozga haydovchi qabul qilgani haqida xabar yuborish"""
-    print("✅ Kuzatuv tizimi ishga tushdi...")
+    print("🚀 Kuzatuv tizimi tekshirmoqda...")
     while True:
         try:
-            # Firebase'dan buyurtmalarni olish
-            response = requests.get(f"{BASE_URL}orders.json")
-            if response.status_code == 200:
-                res = response.json()
-                
-                if res:
-                    for uid, data in res.items():
-                        # Status 'accepted' bo'lishi va notified True bo'lmasligi kerak
-                        status = data.get("status")
-                        notified = data.get("client_notified")
-
-                        if status == "accepted" and (notified is False or notified is None):
-                            # Linkni shakllantirish
-                            kuzatish_url = f"{XARITA_LINKI}/passenger.html?order_id={uid}"
+            # 1. Firebase dan barcha buyurtmalarni olish
+            r = requests.get(f"{BASE_URL}orders.json")
+            orders = r.json()
+            
+            if orders:
+                for order_id, data in orders.items():
+                    # Faqat 'accepted' bo'lgan va xabar ketmaganlarni olamiz
+                    if data.get("status") == "accepted" and data.get("client_notified") is not True:
+                        
+                        print(f"🔎 Topildi! Mijoz {order_id} ga xabar yuborilmoqda...")
+                        
+                        kuzatish_url = f"{XARITA_LINKI}/passenger.html?order_id={order_id}"
+                        kb = InlineKeyboardMarkup(inline_keyboard=[
+                            [InlineKeyboardButton(text="🚕 Haydovchini kuzatish", web_app=WebAppInfo(url=kuzatish_url))]
+                        ])
+                        
+                        text = "🚕 **Buyurtmangiz qabul qilindi!**\n\nHaydovchi yo'lga chiqdi. Pastdagi tugma orqali uni kuzating."
+                        
+                        try:
+                            # MIJOZGA XABAR YUBORISH (str() bilan majburiy matn formatida)
+                            await bot.send_message(chat_id=str(order_id), text=text, reply_markup=kb, parse_mode="Markdown")
                             
-                            kb = InlineKeyboardMarkup(inline_keyboard=[
-                                [InlineKeyboardButton(text="🚕 Haydovchini kuzatish", web_app=WebAppInfo(url=kuzatish_url))]
-                            ])
+                            # 2. Xabar ketganini darrov bazada belgilash
+                            requests.patch(f"{BASE_URL}orders/{order_id}.json", json={"client_notified": True})
+                            print(f"✅ Xabar muvaffaqiyatli ketdi: {order_id}")
                             
-                            text = (
-                                "🚕 **Xushxabar! Buyurtmangiz qabul qilindi.**\n\n"
-                                "Haydovchi siz tomonga yo'lga chiqdi. "
-                                "Pastdagi tugma orqali uni jonli kuzatishingiz mumkin."
-                            )
-                            
-                            try:
-                                # MUHIM: chat_id ni string (matn) shaklida yuboramiz
-                                await bot.send_message(chat_id=str(uid), text=text, reply_markup=kb, parse_mode="Markdown")
-                                
-                                # Bazada flagni o'zgartiramiz (Patch orqali)
-                                patch_url = f"{BASE_URL}orders/{uid}.json"
-                                requests.patch(patch_url, json={"client_notified": True})
-                                print(f"📧 Bildirishnoma yuborildi: {uid}")
-                            except Exception as send_err:
-                                print(f"❌ Xabar ketmadi ({uid}): {send_err}")
+                        except Exception as send_err:
+                            print(f"❌ Telegram yubora olmadi ({order_id}): {send_err}")
+                            # Agar bot bloklangan bo'lsa, bazada shunchaki True qilib qo'yamizki, bot qayta-qayta urinib qotib qolmasin
+                            requests.patch(f"{BASE_URL}orders/{order_id}.json", json={"client_notified": True})
             
         except Exception as e:
-            print(f"⚠️ Kuzatuvda xatolik: {e}")
+            print(f"⚠️ Tizimda xatolik: {e}")
             
-        await asyncio.sleep(4) # Tekshirish oralig'i
+        await asyncio.sleep(3) # Har 3 soniyada tekshiradi
+
 
 # --- 2. START KOMANDASI ---
 @dp.message(CommandStart())
