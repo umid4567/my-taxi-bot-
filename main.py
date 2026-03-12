@@ -82,35 +82,55 @@ async def set_role(callback: types.CallbackQuery):
     await callback.answer()
 
 # --- 3. BUYURTMA BERISH (YO'LOVCHI) ---
+import time # Agar tepada import qilinmagan bo'lsa, buni qo'shing
+
 @dp.message(F.location)
 async def handle_location(message: Message):
     uid = message.from_user.id
     lat = round(message.location.latitude, 5)
     lon = round(message.location.longitude, 5)
-    full_name = message.from_user.full_name
+    full_name = message.from_user.full_name or "Mijoz"
     
-    # 1. Bazaga "waiting" statusi bilan yozamiz (Bu eng muhimi!)
-    requests.put(f"{BASE_URL}orders/{uid}.json", json={
+    # 1. Ma'lumotni tayyorlash
+    order_data = {
         "lat": lat, 
         "lon": lon, 
         "name": full_name,
         "status": "waiting",
         "time": time.strftime("%H:%M")
-    })
+    }
     
+    # 2. Bazaga yozish (Linkni ehtiyotkorlik bilan birlashtiramiz)
+    # BASE_URL oxiridagi sleshni olib tashlab, o'zimiz bitta slesh qo'yamiz
+    clean_url = BASE_URL.rstrip('/') 
+    target_url = f"{clean_url}/orders/{uid}.json"
+    
+    try:
+        response = requests.put(target_url, json=order_data)
+        print(f"DEBUG: Firebase yuborildi: {target_url}")
+        print(f"DEBUG: Status Code: {response.status_code}") # 200 chiqishi kerak
+        print(f"DEBUG: Javob: {response.text}")
+    except Exception as e:
+        print(f"DEBUG: Xatolik yuz berdi: {e}")
+
     await message.answer("🚕 Buyurtmangiz yuborildi. Haydovchilar panelida ko'rindi, iltimos kuting...")
     
-    # 2. Haydovchilarga shunchaki bildirishnoma yuboramiz
-    all_users = requests.get(f"{BASE_URL}users.json").json() or {}
-    for d_id, data in all_users.items():
-        if data.get("role") == "driver":
-            # Ularga tugma yubormaymiz, chunki ular "Panel"ni ochib qo'yishgan
-            # Faqat "Yangi zakaz tushdi" deb xabar beramiz
-            try:
-                await bot.send_message(d_id, f"🔔 **Yangi buyurtma!**\n👤 Yo'lovchi: {full_name}\n\nPanelingizni tekshiring, ovozli signal chiqishi kerak!")
-            except: 
-                continue
-
+    # 3. Haydovchilarga xabar berish
+    try:
+        all_users_res = requests.get(f"{clean_url}/users.json")
+        all_users = all_users_res.json() or {}
+        
+        for d_id, data in all_users.items():
+            if data.get("role") == "driver":
+                try:
+                    await bot.send_message(
+                        d_id, 
+                        f"🔔 **Yangi buyurtma!**\n👤 Yo'lovchi: {full_name}\n\nPanelingizni oching, ovozli signal chiqadi! 🚕"
+                    )
+                except: 
+                    continue
+    except:
+        print("DEBUG: Haydovchilarni olishda xato")
 
 # --- 4. QABUL QILISH (HAYDOVCHI) ---
 @dp.callback_query(F.data.startswith("accept_"))
