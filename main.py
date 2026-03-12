@@ -30,28 +30,39 @@ async def start_web_server():
 
 # --- 1. KUZATUVCHI (MIJOZGA XABAR YUBORISH) ---
 async def watch_all_events():
-    print("Kuzatuv tizimi ishga tushdi...")
+    """Mijozga haydovchi qabul qilgani haqida xabar yuborish tizimi"""
+    print("✅ Kuzatuv tizimi ishga tushdi...")
     while True:
         try:
-            clean_url = BASE_URL.rstrip('/')
-            res = requests.get(f"{clean_url}/orders.json").json() or {}
+            # Firebase'dan buyurtmalarni olish (keshlanmasligi uchun vaqt qo'shildi)
+            res = requests.get(f"{BASE_URL}orders.json").json()
             
-            for uid, data in res.items():
-                # A. Haydovchi qabul qilganida mijozga kuzatuv linkini yuborish
-                if data.get("status") == "accepted" and not data.get("client_notified"):
-                    # MIJOZGA passenger.html yuboramiz
-                    kuzatish_url = f"{XARITA_LINKI}passenger.html?order_id={uid}"
-                    kb = InlineKeyboardMarkup(inline_keyboard=[
-                        [InlineKeyboardButton(text="🚕 Haydovchini kuzatish", web_app=WebAppInfo(url=kuzatish_url))]
-                    ])
-                    try:
-                        await bot.send_message(uid, "🚕 Buyurtmangiz qabul qilindi! Haydovchini xaritada kuzatishingiz mumkin.", reply_markup=kb)
-                        requests.patch(f"{clean_url}/orders/{uid}.json", json={"client_notified": True})
-                    except: pass
+            if res:
+                for uid, data in res.items():
+                    # Status 'accepted' bo'lsa va hali bildirishnoma bormagan bo'lsa
+                    if data.get("status") == "accepted" and data.get("client_notified") is not True:
                         
+                        kuzatish_url = f"{XARITA_LINKI}passenger.html?order_id={uid}"
+                        kb = InlineKeyboardMarkup(inline_keyboard=[
+                            [InlineKeyboardButton(text="🚕 Haydovchini kuzatish", web_app=WebAppInfo(url=kuzatish_url))]
+                        ])
+                        
+                        text = "🚕 **Xushxabar!** Buyurtmangiz qabul qilindi.\n\nHaydovchi yo'lga chiqdi. Pastdagi tugma orqali uni xaritada kuzatishingiz mumkin."
+                        
+                        try:
+                            # Mijozga xabar yuborish
+                            await bot.send_message(chat_id=uid, text=text, reply_markup=kb, parse_mode="Markdown")
+                            
+                            # Qayta yubormaslik uchun bazada belgilab qo'yish
+                            requests.patch(f"{BASE_URL}orders/{uid}.json", json={"client_notified": True})
+                            print(f"📧 Mijozga ({uid}) bildirishnoma yuborildi.")
+                        except Exception as send_err:
+                            print(f"❌ Xabar yuborishda xato ({uid}): {send_err}")
+                            
         except Exception as e:
-            print(f"Xato: {e}")
-        await asyncio.sleep(4)
+            print(f"⚠️ Kuzatuvda xatolik: {e}")
+            
+        await asyncio.sleep(5) # Telegram qotmasligi uchun ideal vaqt
 
 # --- 2. START KOMANDASI ---
 @dp.message(CommandStart())
@@ -79,33 +90,39 @@ async def cmd_start(message: Message):
         ])
         await message.answer("Rolingizni tanlang:", reply_markup=kb_start)
 
-# --- 3. BUYURTMA BERISH VA BEKOR QILISH ---
+# --- 3. BUYURTMA BERISH ---
 @dp.message(F.location)
 async def handle_location(message: Message):
     uid = message.from_user.id
     lat, lon = message.location.latitude, message.location.longitude
     full_name = message.from_user.full_name
     
-    order_data = {"lat": lat, "lon": lon, "name": full_name, "status": "waiting"}
+    # Yangi buyurtma yaratish (barcha xabarlarni reset qilib)
+    order_data = {
+        "lat": lat, 
+        "lon": lon, 
+        "name": full_name, 
+        "status": "waiting",
+        "client_notified": False, # Xabarlarni yangilash
+        "msg_sent": False
+    }
     requests.put(f"{BASE_URL}orders/{uid}.json", json=order_data)
     
-    # Bekor qilish tugmasi
     kb_cancel = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="❌ Buyurtmani bekor qilish", callback_data=f"cancel_{uid}")]
     ])
     await message.answer("🚕 Buyurtma yuborildi. Haydovchi kutilmoqda...", reply_markup=kb_cancel)
     
-    # Haydovchilarga bildirish
+    # Haydovchilarga bildirish yuborish
     all_users = requests.get(f"{BASE_URL}users.json").json() or {}
     for d_id, d_data in all_users.items():
         if d_data.get("role") == "driver":
-            # HAYDOVCHI UCHUN TO'G'RI LINK (order_id bilan)
             driver_url = f"{XARITA_LINKI}index.html?order_id={uid}&clat={lat}&clon={lon}"
             kb_drv = InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="✅ Qabul qilish", web_app=WebAppInfo(url=driver_url))]
             ])
             try:
-                await bot.send_message(d_id, f"🔔 Yangi buyurtma: {full_name}", reply_markup=kb_drv)
+                await bot.send_message(d_id, f"🔔 **Yangi buyurtma!**\n👤 Mijoz: {full_name}", reply_markup=kb_drv, parse_mode="Markdown")
             except: continue
 
 @dp.callback_query(F.data.startswith("cancel_"))
