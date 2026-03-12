@@ -87,22 +87,30 @@ async def handle_location(message: Message):
     uid = message.from_user.id
     lat = round(message.location.latitude, 5)
     lon = round(message.location.longitude, 5)
+    full_name = message.from_user.full_name
     
+    # 1. Bazaga "waiting" statusi bilan yozamiz (Bu eng muhimi!)
     requests.put(f"{BASE_URL}orders/{uid}.json", json={
-        "lat": lat, "lon": lon, "name": message.from_user.full_name
+        "lat": lat, 
+        "lon": lon, 
+        "name": full_name,
+        "status": "waiting",
+        "time": time.strftime("%H:%M")
     })
     
-    await message.answer("🚕 Buyurtmangiz yuborildi. Iltimos kuting...")
+    await message.answer("🚕 Buyurtmangiz yuborildi. Haydovchilar panelida ko'rindi, iltimos kuting...")
     
+    # 2. Haydovchilarga shunchaki bildirishnoma yuboramiz
     all_users = requests.get(f"{BASE_URL}users.json").json() or {}
     for d_id, data in all_users.items():
         if data.get("role") == "driver":
-            kb_h = InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="✅ Qabul qilish", callback_data=f"accept_{uid}_{lat}_{lon}")]
-            ])
+            # Ularga tugma yubormaymiz, chunki ular "Panel"ni ochib qo'yishgan
+            # Faqat "Yangi zakaz tushdi" deb xabar beramiz
             try:
-                await bot.send_message(d_id, f"🔔 **Yangi buyurtma!**\n👤 Yo'lovchi: {message.from_user.full_name}", reply_markup=kb_h)
-            except: continue
+                await bot.send_message(d_id, f"🔔 **Yangi buyurtma!**\n👤 Yo'lovchi: {full_name}\n\nPanelingizni tekshiring, ovozli signal chiqishi kerak!")
+            except: 
+                continue
+
 
 # --- 4. QABUL QILISH (HAYDOVCHI) ---
 @dp.callback_query(F.data.startswith("accept_"))
