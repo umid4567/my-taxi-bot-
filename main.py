@@ -31,34 +31,58 @@ async def start_web_server():
 
 # --- 1. KUZATUVCHI (MIJOZGA XABAR YUBORISH) ---
 async def watch_all_events():
+    """Mijozga xabar yuborish tizimi - ENG ANIQLASHTIRILGAN VERSIYA"""
     print("✅ Kuzatuv tizimi ishga tushdi...")
     while True:
         try:
-            res = requests.get(f"{BASE_URL}orders.json").json()
-            if res:
-                for uid, data in res.items():
-                    # Status accepted bo'lsa va hali notified bo'lmasa
-                    if data.get("status") == "accepted" and data.get("client_notified") is not True:
-                        
-                        # TO'G'RI LINK FORMATI
-                        kuzatish_url = f"{XARITA_LINKI}/passenger.html?order_id={uid}"
-                        
-                        kb = InlineKeyboardMarkup(inline_keyboard=[
-                            [InlineKeyboardButton(text="🚕 Haydovchini kuzatish", web_app=WebAppInfo(url=kuzatish_url))]
-                        ])
-                        
-                        text = "🚕 **Buyurtmangiz qabul qilindi!**\n\nHaydovchi yo'lga chiqdi. Pastdagi tugma orqali uni xaritada jonli kuzatishingiz mumkin."
-                        
-                        try:
-                            await bot.send_message(chat_id=uid, text=text, reply_markup=kb, parse_mode="Markdown")
-                            requests.patch(f"{BASE_URL}orders/{uid}.json", json={"client_notified": True})
-                            print(f"📧 Bildirishnoma yuborildi: {uid}")
-                        except Exception as e:
-                            print(f"❌ Xabar ketmadi: {e}")
+            # Firebase'dan buyurtmalarni olish
+            response = requests.get(f"{BASE_URL}orders.json")
+            if response.status_code == 200:
+                res = response.json()
+                
+                if res:
+                    for uid, data in res.items():
+                        # Diqqat: status 'accepted' bo'lishi va notified True bo'lmasligi kerak
+                        status = data.get("status")
+                        notified = data.get("client_notified")
+
+                        if status == "accepted" and notified is not True:
+                            # 1. Linkni to'g'ri shakllantirish
+                            kuzatish_url = f"{XARITA_LINKI}/passenger.html?order_id={uid}"
                             
+                            kb = InlineKeyboardMarkup(inline_keyboard=[
+                                [InlineKeyboardButton(text="🚕 Haydovchini kuzatish", web_app=WebAppInfo(url=kuzatish_url))]
+                            ])
+                            
+                            text = (
+                                "🚕 **Xushxabar! Buyurtmangiz qabul qilindi.**\n\n"
+                                "Haydovchi siz tomonga yo'lga chiqdi. "
+                                "Pastdagi tugma orqali uni jonli kuzatishingiz mumkin."
+                            )
+                            
+                            try:
+                                # MUHIM: chat_id ni string (matn) shaklida yuboramiz
+                                await bot.send_message(chat_id=str(uid), text=text, reply_markup=kb, parse_mode="Markdown")
+                                
+                                # 2. Bazada flagni o'zgartiramiz
+                                patch_url = f"{BASE_URL}orders/{uid}.json"
+                                patch_res = requests.patch(patch_url, json={"client_notified": True})
+                                
+                                if patch_res.status_code == 200:
+                                    print(f"📧 Bildirishnoma yuborildi: {uid}")
+                                else:
+                                    print(f"❌ Firebase flag yangilanmadi: {uid}")
+                                    
+                            except Exception as send_err:
+                                print(f"❌ Xabar ketmadi ({uid}): {send_err}")
+            else:
+                print(f"📡 Firebase ulanishda xato: {response.status_code}")
+
         except Exception as e:
-            print(f"⚠️ Xatolik: {e}")
+            print(f"⚠️ Kuzatuvda xatolik: {e}")
+            
         await asyncio.sleep(5)
+
 
 # --- 2. START KOMANDASI ---
 @dp.message(CommandStart())
