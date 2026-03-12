@@ -97,12 +97,32 @@ async def cmd_start(message: Message):
 async def handle_location(message: Message):
     uid = message.from_user.id
     lat, lon = message.location.latitude, message.location.longitude
-    order_data = {"lat": lat, "lon": lon, "name": message.from_user.full_name, "status": "waiting", "client_notified": False}
+    
+    # 1. Buyurtmani bazaga yozish (Mijozga tugma yuborilganini belgilaymiz)
+    order_data = {
+        "lat": lat, 
+        "lon": lon, 
+        "name": message.from_user.full_name, 
+        "status": "waiting", 
+        "client_notified": True 
+    }
     requests.put(f"{BASE_URL}orders/{uid}.json", json=order_data)
     
-    kb_cancel = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="❌ Bekor qilish", callback_data=f"cancel_{uid}")]])
-    await message.answer("🚕 Buyurtma yuborildi. Haydovchi kutilmoqda...", reply_markup=kb_cancel)
+    # 2. YO'LOVCHI UCHUN TUGMALAR (Kuzatish va Bekor qilish)
+    kuzatish_url = f"{XARITA_LINKI}/passenger.html?order_id={uid}"
     
+    kb_client = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🚕 Haydovchini kuzatish", web_app=WebAppInfo(url=kuzatish_url))],
+        [InlineKeyboardButton(text="❌ Bekor qilish", callback_data=f"cancel_{uid}")]
+    ])
+    
+    await message.answer(
+        "🚕 **Buyurtma yuborildi. Haydovchi kutilmoqda...**\n\nPastdagi tugma orqali haydovchi qabul qilganidan so'ng uni kuzatishingiz mumkin.", 
+        reply_markup=kb_client,
+        parse_mode="Markdown"
+    )
+    
+    # 3. HAYDOVCHILARGA BUYURTMANI YUBORISH
     try:
         all_users = requests.get(f"{BASE_URL}users.json").json() or {}
     except:
@@ -110,15 +130,24 @@ async def handle_location(message: Message):
 
     for d_id, d_data in all_users.items():
         if d_data.get("role") == "driver":
+            # Haydovchi uchun taksimetr va xarita havolasi
             driver_url = f"{XARITA_LINKI}/index.html?order_id={uid}&clat={lat}&clon={lon}"
+            
             kb_drv = InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="✅ Qabul qilish", web_app=WebAppInfo(url=driver_url))],
                 [InlineKeyboardButton(text="📍 Yandex Xarita", url=f"https://yandex.uz/maps/?pt={lon},{lat}&z=16&l=map")]
             ])
+            
             try:
-                await bot.send_message(d_id, f"🔔 **Yangi buyurtma!**\n👤: {message.from_user.full_name}", reply_markup=kb_drv, parse_mode="Markdown")
+                await bot.send_message(
+                    d_id, 
+                    f"🔔 **Yangi buyurtma!**\n👤: {message.from_user.full_name}", 
+                    reply_markup=kb_drv, 
+                    parse_mode="Markdown"
+                )
             except: 
                 continue
+
 
 @dp.callback_query(F.data.startswith("set_role_"))
 async def set_role(callback: types.CallbackQuery):
