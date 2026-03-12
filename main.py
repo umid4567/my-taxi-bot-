@@ -10,6 +10,7 @@ from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton, InlineKe
 TOKEN = os.getenv("BOT_TOKEN") 
 BASE_URL = "https://umut-taxi-default-rtdb.europe-west1.firebasedatabase.app/"
 XARITA_LINKI = "https://umid4567.github.io/my-taxi-bot/" 
+DRIVER_APP = "https://umid4567.github.io/my-taxi-bot/driver_db.html"
 
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
