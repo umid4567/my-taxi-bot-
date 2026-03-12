@@ -1,6 +1,7 @@
 import os
 import asyncio
 import requests
+import time
 from aiohttp import web # SHU YERDA YANGI QISMI
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import CommandStart, Command
