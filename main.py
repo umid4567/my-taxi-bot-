@@ -41,7 +41,7 @@ async def watch_all_events():
             for uid, data in res.items():
                 # A. Haydovchi qabul qilganini aniqlash
                 if data.get("status") == "accepted" and not data.get("client_notified"):
-                    kuzatish_url = f"{XARITA_LINKI}index.html?order_id={uid}"
+                    kuzatish_url = f"{XARITA_LINKI}passenger.html?order_id={uid}"
                     kb = InlineKeyboardMarkup(inline_keyboard=[
                         [InlineKeyboardButton(text="🚕 Haydovchini xaritada kuzatish", web_app=WebAppInfo(url=kuzatish_url))]
                     ])
