@@ -27,11 +27,9 @@ async def start_web_server():
     port = int(os.environ.get("PORT", 8080))
     site = web.TCPSite(runner, "0.0.0.0", port)
     await site.start()
-    print(f"Web server started on port {port}")
 
-# --- 1. HAYDOVCHI QABUL QILGANDA VA XABAR BERGANDA KUZATUVCHI ---
+# --- 1. KUZATUVCHI (MIJOZGA XABAR YUBORISH) ---
 async def watch_all_events():
-    """Barcha Firebase voqealarini bitta tsiklda kuzatamiz"""
     print("Kuzatuv tizimi ishga tushdi...")
     while True:
         try:
@@ -39,33 +37,20 @@ async def watch_all_events():
             res = requests.get(f"{clean_url}/orders.json").json() or {}
             
             for uid, data in res.items():
-                # A. Haydovchi qabul qilganini aniqlash
+                # A. Haydovchi qabul qilganida mijozga kuzatuv linkini yuborish
                 if data.get("status") == "accepted" and not data.get("client_notified"):
+                    # MIJOZGA passenger.html yuboramiz
                     kuzatish_url = f"{XARITA_LINKI}passenger.html?order_id={uid}"
                     kb = InlineKeyboardMarkup(inline_keyboard=[
-                        [InlineKeyboardButton(text="🚕 Haydovchini xaritada kuzatish", web_app=WebAppInfo(url=kuzatish_url))]
+                        [InlineKeyboardButton(text="🚕 Haydovchini kuzatish", web_app=WebAppInfo(url=kuzatish_url))]
                     ])
-                    text = "🚕 **Xushxabar!** Buyurtmangiz qabul qilindi.\n\nHaydovchi yo'lga chiqdi. Pastdagi tugma orqali uni xaritada kuzatishingiz mumkin."
                     try:
-                        await bot.send_message(uid, text, reply_markup=kb, parse_mode="Markdown")
+                        await bot.send_message(uid, "🚕 Buyurtmangiz qabul qilindi! Haydovchini xaritada kuzatishingiz mumkin.", reply_markup=kb)
                         requests.patch(f"{clean_url}/orders/{uid}.json", json={"client_notified": True})
-                    except: pass
-
-                # B. Haydovchi "Yo'ldaman" yoki "Keldim" tugmasini bosganini aniqlash
-                notify_type = data.get("client_notify")
-                if notify_type and not data.get("msg_sent"):
-                    msg_text = "🚕 Haydovchi yo'lga chiqdi, tayyor turing!"
-                    if notify_type == "arrived":
-                        msg_text = "🏁 Haydovchi yetib keldi, tashqariga chiqishingiz mumkin."
-                    
-                    try:
-                        await bot.send_message(uid, msg_text)
-                        requests.patch(f"{clean_url}/orders/{uid}.json", json={"msg_sent": True})
                     except: pass
                         
         except Exception as e:
-            print(f"Kuzatuvda xatolik: {e}")
-            
+            print(f"Xato: {e}")
         await asyncio.sleep(4)
 
 # --- 2. START KOMANDASI ---
@@ -78,82 +63,74 @@ async def cmd_start(message: Message):
         kb = ReplyKeyboardMarkup(keyboard=[
             [KeyboardButton(text="🚖 Yangi buyurtmalarni kutish", 
                             web_app=WebAppInfo(url=f"{XARITA_LINKI}driver_db.html?driver_id={uid}"))],
-            [KeyboardButton(text="💰 Mening balansim")],
             [KeyboardButton(text="🔄 Rolni o'zgartirish")]
         ], resize_keyboard=True)
-        await message.answer(f"Xush kelibsiz, haydovchi {user_data.get('name')}!", reply_markup=kb)
-
+        await message.answer(f"Salom haydovchi {user_data.get('name')}!", reply_markup=kb)
     elif user_data and user_data.get("role") == "client":
         kb = ReplyKeyboardMarkup(keyboard=[
             [KeyboardButton(text="🚕 Taksi chaqirish", request_location=True)],
-            [KeyboardButton(text="ℹ️ Ma'lumot")],
             [KeyboardButton(text="🔄 Rolni o'zgartirish")]
         ], resize_keyboard=True)
-        await message.answer("Xush kelibsiz! Taksi kerak bo'lsa tugmani bosing.", reply_markup=kb)
-    
+        await message.answer("Taksi kerak bo'lsa lokatsiya yuboring.", reply_markup=kb)
     else:
         kb_start = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="🚖 Men yo'lovchiman", callback_data="set_role_client")],
             [InlineKeyboardButton(text="🚕 Men haydovchiman", callback_data="set_role_driver")]
         ])
-        await message.answer("Xush kelibsiz! Rolingizni tanlang:", reply_markup=kb_start)
+        await message.answer("Rolingizni tanlang:", reply_markup=kb_start)
 
-# --- 3. ROLNI BOSHQARISH ---
-@dp.message(F.text == "🔄 Rolni o'zgartirish")
-@dp.message(Command("reset"))
-async def reset_user(message: Message):
+# --- 3. BUYURTMA BERISH VA BEKOR QILISH ---
+@dp.message(F.location)
+async def handle_location(message: Message):
     uid = message.from_user.id
-    requests.delete(f"{BASE_URL}users/{uid}.json")
-    await message.answer("🔄 Ma'lumotlaringiz o'chirildi.\n/start bosing.", reply_markup=types.ReplyKeyboardRemove())
+    lat, lon = message.location.latitude, message.location.longitude
+    full_name = message.from_user.full_name
+    
+    order_data = {"lat": lat, "lon": lon, "name": full_name, "status": "waiting"}
+    requests.put(f"{BASE_URL}orders/{uid}.json", json=order_data)
+    
+    # Bekor qilish tugmasi
+    kb_cancel = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="❌ Buyurtmani bekor qilish", callback_data=f"cancel_{uid}")]
+    ])
+    await message.answer("🚕 Buyurtma yuborildi. Haydovchi kutilmoqda...", reply_markup=kb_cancel)
+    
+    # Haydovchilarga bildirish
+    all_users = requests.get(f"{BASE_URL}users.json").json() or {}
+    for d_id, d_data in all_users.items():
+        if d_data.get("role") == "driver":
+            # HAYDOVCHI UCHUN TO'G'RI LINK (order_id bilan)
+            driver_url = f"{XARITA_LINKI}index.html?order_id={uid}&clat={lat}&clon={lon}"
+            kb_drv = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="✅ Qabul qilish", web_app=WebAppInfo(url=driver_url))]
+            ])
+            try:
+                await bot.send_message(d_id, f"🔔 Yangi buyurtma: {full_name}", reply_markup=kb_drv)
+            except: continue
+
+@dp.callback_query(F.data.startswith("cancel_"))
+async def cancel_order(callback: types.CallbackQuery):
+    c_id = callback.data.split("_")[1]
+    requests.delete(f"{BASE_URL}orders/{c_id}.json")
+    await callback.message.edit_text("❌ Buyurtma bekor qilindi.")
+    await callback.answer()
 
 @dp.callback_query(F.data.startswith("set_role_"))
 async def set_role(callback: types.CallbackQuery):
     role = callback.data.split("_")[2]
-    uid = callback.from_user.id
-    requests.put(f"{BASE_URL}users/{uid}.json", json={"role": role, "name": callback.from_user.full_name})
-    await callback.message.answer(f"✅ Saqlandi! /start bosing.")
+    requests.put(f"{BASE_URL}users/{callback.from_user.id}.json", json={"role": role, "name": callback.from_user.full_name})
+    await callback.message.answer("Saqlandi! /start bosing.")
     await callback.answer()
 
-# --- 4. BUYURTMA BERISH (YO'LOVCHI) ---
-@dp.message(F.location)
-async def handle_location(message: Message):
-    uid = message.from_user.id
-    lat = round(message.location.latitude, 5)
-    lon = round(message.location.longitude, 5)
-    full_name = message.from_user.full_name or "Mijoz"
-    
-    order_data = {
-        "lat": lat, "lon": lon, "name": full_name,
-        "status": "waiting", "time": time.strftime("%H:%M")
-    }
-    
-    clean_url = BASE_URL.rstrip('/') 
-    try:
-        requests.put(f"{clean_url}/orders/{uid}.json", json=order_data)
-        await message.answer("🚕 Buyurtmangiz yuborildi. Iltimos, haydovchi qabul qilishini kuting...")
-        
-        # Haydovchilarga bildirishnoma yuborish
-        all_users = requests.get(f"{clean_url}/users.json").json() or {}
-        for d_id, data in all_users.items():
-            if data.get("role") == "driver":
-                try:
-                    await bot.send_message(d_id, f"🔔 **Yangi buyurtma!**\n👤 Yo'lovchi: {full_name}\n🚕 Panelingizni tekshiring!")
-                except: continue
-    except Exception as e:
-        print(f"Xatolik: {e}")
+@dp.message(F.text == "🔄 Rolni o'zgartirish")
+async def reset_user(message: Message):
+    requests.delete(f"{BASE_URL}users/{message.from_user.id}.json")
+    await message.answer("Rolingiz o'chirildi. /start bosing.")
 
-# --- ASOSIY MAIN FUNKSIYASI ---
 async def main():
-    # Web serverni yurgizamiz
     asyncio.create_task(start_web_server())
-    # Barcha kuzatuvlarni bitta vazifada yurgizamiz
     asyncio.create_task(watch_all_events())
-    # Bot pollingni boshlaymiz
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
-    try:
-        asyncio.run(main())
-    except (KeyboardInterrupt, SystemExit):
-        pass
-
+    asyncio.run(main())
