@@ -36,14 +36,18 @@ async def cmd_start(message: Message):
     user_data = requests.get(f"{BASE_URL}users/{uid}.json").json()
 
     if user_data and user_data.get("role") == "driver":
+        # HAYDOVCHI UCHUN TUGMALAR
         kb = ReplyKeyboardMarkup(keyboard=[
-            [KeyboardButton(text="🚖 Yangi buyurtmalarni kutish")],
+            # BU TUGMA ENDI WEB APP PANELNI OCHADI
+            [KeyboardButton(text="🚖 Yangi buyurtmalarni kutish", 
+                            web_app=WebAppInfo(url=f"{XARITA_LINKI}driver_db.html?driver_id={uid}"))],
             [KeyboardButton(text="💰 Mening balansim")],
             [KeyboardButton(text="🔄 Rolni o'zgartirish")]
         ], resize_keyboard=True)
-        await message.answer(f"Xush kelibsiz, haydovchi {user_data.get('name')}!", reply_markup=kb)
+        await message.answer(f"Xush kelibsiz, haydovchi {user_data.get('name')}! Panelni ochish uchun pastdagi tugmani bosing.", reply_markup=kb)
 
     elif user_data and user_data.get("role") == "client":
+        # YO'LOVCHI UCHUN TUGMALAR
         kb = ReplyKeyboardMarkup(keyboard=[
             [KeyboardButton(text="🚕 Taksi chaqirish", request_location=True)],
             [KeyboardButton(text="ℹ️ Ma'lumot")],
@@ -52,11 +56,13 @@ async def cmd_start(message: Message):
         await message.answer("Xush kelibsiz! Taksi kerak bo'lsa tugmani bosing.", reply_markup=kb)
     
     else:
+        # ROL TANLANMAGAN BO'LSA
         kb_start = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="🚖 Men yo'lovchiman", callback_data="set_role_client")],
             [InlineKeyboardButton(text="🚕 Men haydovchiman", callback_data="set_role_driver")]
         ])
         await message.answer("Xush kelibsiz! Rolingizni tanlang:", reply_markup=kb_start)
+
 
 # --- 2. ROLNI BOSHQARISH ---
 @dp.message(F.text == "🔄 Rolni o'zgartirish")
