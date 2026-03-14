@@ -131,9 +131,27 @@ async def cmd_start(message: Message):
 @dp.message(F.web_app_data)
 async def handle_webapp_data(message: Message):
     data = message.web_app_data.data
+    uid = message.from_user.id
+    
     if data.startswith("order_placed"):
         await message.answer("✅ Buyurtmangiz qabul qilindi! Haydovchi qidirilmoqda...")
-        # Haydovchilarga yuborish mantiqi Firebase orqali watch_all_events da yoki shu yerda bo'ladi
+        
+        # Firebase'dan yangi buyurtma ma'lumotlarini olamiz
+        order = requests.get(f"{BASE_URL}orders/{uid}.json").json()
+        if not order: return
+
+        # Haydovchilarga yuborish
+        all_users = requests.get(f"{BASE_URL}users.json").json() or {}
+        for d_id, d_data in all_users.items():
+            if d_data.get("role") == "driver":
+                driver_url = f"{XARITA_LINKI}/index.html?order_id={uid}&driver_id={d_id}&clat={order['lat']}&clon={order['lon']}"
+                kb_drv = InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(text="✅ Qabul qilish", web_app=WebAppInfo(url=driver_url))],
+                    [InlineKeyboardButton(text="📍 Yandex Xarita", url=f"https://yandex.uz/maps/?pt={order['lon']},{order['lat']}&z=16&l=map")]
+                ])
+                try:
+                    await bot.send_message(d_id, f"🔔 **Yangi buyurtma!**\n👤: {order.get('name')}\n💰 Narxi: {order.get('price')} so'm", reply_markup=kb_drv, parse_mode="Markdown")
+                except: continue
 
 # --- ROLNI O'ZGARTIRISH ---
 @dp.message(F.text == "🔄 Rolni o'zgartirish")
